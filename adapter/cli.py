@@ -9,5 +9,6 @@ def parse_args():
     ap.add_argument("--depth", type=int, help="search depth in pieces")
     ap.add_argument("--width", type=int, help="beam width")
     ap.add_argument("--settings", help="JSON file overriding keys, timing and search settings")
+    ap.add_argument("--garbage", action="store_true", help="read the incoming garbage meter and plan for it")
     ap.add_argument("--sd", action="store_true", help="allow soft drop in key paths (needs SDF = infinity)")
     return ap.parse_args()

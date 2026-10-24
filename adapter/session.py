@@ -182,8 +182,10 @@ class Session:
         state = self.state
         full = stack[:20] + [state.memory[i] if i < len(state.memory) else 0 for i in range(20, 40)]
         queue = state.current + "".join(p or "" for p in previews)
-        move = self.engine.ask(full, state.hold, queue, state.b2b, state.combo,
-                               self.reader.incoming(frame), garbage_hole(colors))
+        incoming, hole = 0, None
+        if self.settings.get("garbage"):
+            incoming, hole = self.reader.incoming(frame), garbage_hole(colors)
+        move = self.engine.ask(full, state.hold, queue, state.b2b, state.combo, incoming, hole)
         if move is None:
             self.on_dead()
             return

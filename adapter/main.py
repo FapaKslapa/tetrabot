@@ -27,6 +27,7 @@ def main():
         settings["search"]["depth"] = args.depth
     if args.width:
         settings["search"]["width"] = args.width
+    settings["garbage"] = args.garbage
     if not args.watch and not os.path.exists(BINARY):
         print("Engine binary not found. Run ./build.sh first.")
         return 1
