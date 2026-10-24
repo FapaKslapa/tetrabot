@@ -33,6 +33,7 @@ class Session:
         self.idle_since = None
         self.last_recalibration = 0.0
         self.dead_notices = 0
+        self.last_seen = []
 
     def use_layout(self, layout):
         self.layout = layout
@@ -167,6 +168,8 @@ class Session:
         if not state.sees_garbage and state.pieces > 0:
             expected = (state.memory + [0] * 20)[:20]
             diff = bit_difference(stack, expected)
+            if self.settings.get("trace") and diff:
+                print("screen differs from expected board by %d cells" % diff, flush=True)
             if diff <= MEMORY_TOLERANCE:
                 stack, state.bad_streak = expected, 0
             else:
@@ -185,11 +188,14 @@ class Session:
         incoming, hole = 0, None
         if self.settings.get("garbage"):
             incoming, hole = self.reader.incoming(frame), garbage_hole(colors)
+        started = time.time()
         move = self.engine.ask(full, state.hold, queue, state.b2b, state.combo, incoming, hole)
+        thought = time.time()
         if move is None:
             self.on_dead()
             return
         self.keys.run(move)
+        pressed = time.time()
         state.pieces += 1
         if move.use_hold and state.hold is None:
             state.hold, next_piece, consumed = state.current, previews[1], 2
@@ -200,7 +206,12 @@ class Session:
         state.b2b = move.b2b
         state.combo = move.combo
         state.memory = move.after
-        self.wait_for_spawn(previews[consumed:])
+        landed = self.wait_for_spawn(previews[consumed:])
+        if self.settings.get("trace"):
+            print("piece %s hold=%d keys=%s think=%dms press=%dms spawn=%dms %s seen=%s expected=%s incoming=%d" % (
+                move.piece, move.use_hold, ",".join(move.keys), (thought - started) * 1000, (pressed - thought) * 1000,
+                (time.time() - pressed) * 1000, "ok" if landed else "TIMEOUT",
+                "".join(p or "?" for p in self.last_seen), "".join(previews[consumed:]), incoming), flush=True)
         state.current = next_piece
 
     def on_dead(self):
@@ -216,7 +227,9 @@ class Session:
         tolerance = 1 if len(expected) >= 4 else 0
         while time.time() < deadline:
             seen = self.reader.previews(self.capture.grab_layout(self.layout))
+            self.last_seen = seen
             hits = sum(1 for x, y in zip(seen, expected) if x == y)
             if hits >= len(expected) - tolerance and seen[0] == expected[0]:
-                return
+                return True
             time.sleep(0.004)
+        return False

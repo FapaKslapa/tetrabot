@@ -28,6 +28,7 @@ def main():
     if args.width:
         settings["search"]["width"] = args.width
     settings["garbage"] = args.garbage
+    settings["trace"] = args.trace
     if not args.watch and not os.path.exists(BINARY):
         print("Engine binary not found. Run ./build.sh first.")
         return 1
