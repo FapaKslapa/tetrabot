@@ -31,6 +31,22 @@ def classify(color, palette=DEFAULT_PALETTE):
     return best
 
 
+def vote(pixels, palette=DEFAULT_PALETTE):
+    px = np.asarray(pixels, dtype=np.float32).reshape(-1, 3)
+    if len(px) == 0:
+        return None, 0
+    n = px / np.maximum(px.max(axis=1), 1.0)[:, None]
+    letters = list(palette)
+    refs = np.array([normalize(palette[k]) for k in letters], dtype=np.float32)
+    dist = ((n[:, None, :] - refs[None, :, :]) ** 2).sum(axis=2)
+    best = dist.argmin(axis=1)
+    keep = dist.min(axis=1) <= MAX_TINT_DISTANCE
+    if not keep.any():
+        return None, 0
+    counts = np.bincount(best[keep], minlength=len(letters))
+    return letters[int(counts.argmax())], int(counts.max())
+
+
 def is_gray(color):
     mx = float(color.max())
     return 55 <= mx <= 215 and float(color.min()) / mx > 0.85

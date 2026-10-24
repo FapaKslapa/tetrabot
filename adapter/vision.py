@@ -2,7 +2,7 @@ from typing import NamedTuple, Tuple
 
 import numpy as np
 
-from palette import classify, is_block
+from palette import classify, is_block, vote
 
 BRIGHT = 110
 MIN_PIECE_PIXELS = 20
@@ -76,7 +76,10 @@ class Reader:
         bright = pixels[pixels.max(axis=1) >= BRIGHT]
         if len(bright) < MIN_PIECE_PIXELS * scale * scale:
             return None
-        return classify(bright.mean(axis=0), self.palette)
+        letter, count = vote(bright, self.palette)
+        if count < MIN_PIECE_PIXELS * scale * scale:
+            return None
+        return letter
 
     def previews(self, frame):
         x0, y0, x1, y1 = self.layout.next
