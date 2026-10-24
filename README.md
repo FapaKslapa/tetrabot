@@ -32,6 +32,8 @@ Options:
 | `--dry` | Compute moves but press nothing |
 | `--countdown N` | Seconds to switch to the browser (default 5) |
 | `--depth N`, `--width N` | Search depth and beam width |
+| `--garbage` | Read the incoming garbage meter and plan for it (off by default) |
+| `--trace` | Print timing and reading details for every piece |
 | `--sd` | Allow soft drop in key paths (needs SDF set to infinity) |
 | `--settings FILE` | JSON file overriding keys, timing and search settings |
 
@@ -96,7 +98,7 @@ Search: a beam search over the current piece plus the preview queue. At each lay
 
 Evaluation features: holes, depth of holes, bumpiness, maximum height, a danger term for tall stacks, row transitions, well depth, back-to-back and combo state. The weights live in `bot/weights.rs`; `tune` improves them by random search with self-play.
 
-Garbage awareness: `incoming` is the number of pending garbage lines read from the meter next to the board, and `hole` is the column of the gray rows already on the stack. During search, attack cancels pending lines first; the rest rises (at most 8 rows) after any placement that clears nothing, so the bot prefers clearing lines and keeping the stack low when garbage is on the way. `versus --blind-other` disables this for the opponent to measure its effect; `tune` accepts `--seed` and `--out`.
+Garbage awareness is only used when the front end is started with `--garbage`; otherwise it sends `incoming=0`. `incoming` is the number of pending garbage lines read from the meter next to the board, and `hole` is the column of the gray rows already on the stack. During search, attack cancels pending lines first; the rest rises (at most 8 rows) after any placement that clears nothing, so the bot prefers clearing lines and keeping the stack low when garbage is on the way. `versus --blind-other` disables this for the opponent to measure its effect; `tune` accepts `--seed` and `--out`.
 
 Line protocol: the front end writes one line per decision to the engine and reads one line back.
 
