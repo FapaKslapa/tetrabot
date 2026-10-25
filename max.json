@@ -1,0 +1,4 @@
+{
+  "timing": {"tap_ms": 16, "gap_ms": 6, "soft_drop_ms": 55, "spawn_timeout_ms": 1500},
+  "search": {"depth": 7, "width": 160, "nosd": true}
+}

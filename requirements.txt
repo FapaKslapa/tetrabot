@@ -1,4 +1,5 @@
 numpy
 mss
-pyobjc-framework-Quartz
-pyobjc-framework-ApplicationServices
+pynput; sys_platform != "darwin"
+pyobjc-framework-Quartz; sys_platform == "darwin"
+pyobjc-framework-ApplicationServices; sys_platform == "darwin"
