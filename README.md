@@ -8,10 +8,11 @@ This project is for demonstration and educational purposes only. Automating inpu
 
 ## Requirements
 
-- macOS (screen capture and key events use Quartz)
 - Rust toolchain (`cargo`)
 - Python 3
-- Screen Recording and Accessibility permissions for the terminal app
+- macOS: Screen Recording and Accessibility permissions for the terminal app
+- Windows 10 or later: nothing extra
+- Linux: an X11 session (Wayland blocks screen capture and key injection)
 
 ## Usage
 
@@ -20,7 +21,7 @@ This project is for demonstration and educational purposes only. Automating inpu
 ./run.sh
 ```
 
-`run.sh` counts down so you can switch to the browser, then looks for the board on every connected display, calibrates itself and starts playing. Nothing is configured by hand and no screenshot is written to disk: frames only exist in memory.
+On Windows use `build.bat` and `run.bat` instead. `run.sh` counts down so you can switch to the browser, then looks for the board on every connected display, calibrates itself and starts playing. Nothing is configured by hand and no screenshot is written to disk: frames only exist in memory.
 
 Emergency stop: move the mouse to the top-left corner of the screen. Pause: top-right corner.
 
@@ -34,8 +35,18 @@ Options:
 | `--depth N`, `--width N` | Search depth and beam width |
 | `--garbage` | Read the incoming garbage meter and plan for it (off by default) |
 | `--trace` | Print timing and reading details for every piece |
+| `--engine beam\|cc2` | `beam` (default) uses the built-in search, `cc2` lets Cold Clear 2 choose moves |
+| `--think N` | Cold Clear 2 thinking time per move in milliseconds (default 40) |
+| `--keep-tree` | Keep the Cold Clear search running while keys are pressed instead of restarting it for every piece |
+| `--no-ponder` | Do not think about the next piece while keys are pressed |
 | `--sd` | Allow soft drop in key paths (needs SDF set to infinity) |
+| `--threads N` (engine) | Beam search worker threads; set `search.threads` in the settings file (default 3) |
+| `--pc-ms N` (engine) | Wall-clock budget of the perfect clear search in milliseconds (default 40) |
 | `--settings FILE` | JSON file overriding keys, timing and search settings |
+
+Cold Clear 2 needs soft drop to reach tucks and T-spins under overhangs, so for it set the soft drop factor (SDF) to infinity in the game handling settings and start with `--sd`. Without `--sd` the bot only plays placements reachable without soft drop and falls back to the next best suggestion.
+
+With `--trace` each piece prints how the board was read (`path=quick`, `full` or `settle` with the reason for the slow path), the spawn wait outcome (`ok`, `REALIGN`, `TIMEOUT`) and how many of the last ten reads took the fast path. For the fastest reading, use the minimal graphics preset in the game and turn off the danger warning, board spin on T-spin and other screen effects.
 
 Default key bindings are the arrow keys, `z` for counter-clockwise rotation, `c` for hold and space for hard drop.
 
@@ -55,6 +66,8 @@ src/
     weights.rs       tunable weights
     features.rs      board features, evaluation and move rewards
     search.rs        beam search with hold and the preview queue
+    speculate.rs     expected value over the pieces the bag can still deal
+    perfect.rs       perfect clear search over the known pieces
   sim/               self-play simulator
     rng.rs           small xorshift generator
     game.rs          one game with a 7-bag and garbage
@@ -69,7 +82,8 @@ adapter/
   main.py            entry point
   cli.py             command line options
   settings.py        defaults for keys, timing and search
-  system.py          permissions, mouse corners
+  system.py          mouse corners, permission checks
+  backends/          key events and permissions per platform (macOS Quartz, pynput elsewhere)
   capture.py         screen grabbing
   imageops.py        integral images, runs, connected components
   board_finder.py    locates the 10x20 board
@@ -78,13 +92,19 @@ adapter/
   calibrate.py       calibration over all displays with a sanity check
   palette.py         piece colours and classification
   vision.py          reads the stack, the queue, the hold and the falling piece
-  stack.py           stack clean-up helpers
+  stack.py           stack clean-up helpers, garbage rise prediction
+  bag.py             7-bag tracking for pieces beyond the preview
+  ponder.py          thinks about the next piece while keys are pressed
   engine_client.py   talks to the Rust engine
   keys.py            sends key events
   game_state.py      per-game state
   session.py         main loop
 tests/               unit tests on synthetic frames
 ```
+
+## Cold Clear 2
+
+[Cold Clear 2](https://github.com/MinusKelvin/cold-clear-2) by MinusKelvin is a Tetris bot licensed under MIT or Apache-2.0. The build script clones it into `vendor/` and compiles it; its sources are not part of this repository. It speaks the Tetris Bot Protocol over stdin and stdout. For every piece the front end sends the board read from the screen, the queue, the hold piece, combo, back-to-back state and the 7-bag state it tracked, waits for the thinking time, and asks for a suggestion. The suggested placement is turned into a set of cells, and the built-in engine finds the key sequence that reaches exactly those cells. Played alone, with the same piece sequences, Cold Clear 2 produced about 0.72 attack per piece at 40 ms against about 0.59 for the built-in search. In simulated versus games with garbage the built-in search, which plans for incoming lines, won most matches, so it stays the default; start with `--engine cc2` to compare. `--garbage` makes Cold Clear plan as if the pending lines had already risen.
 
 ## How the engine works
 
@@ -100,10 +120,12 @@ Evaluation features: holes, depth of holes, bumpiness, maximum height, a danger 
 
 Garbage awareness is only used when the front end is started with `--garbage`; otherwise it sends `incoming=0`. `incoming` is the number of pending garbage lines read from the meter next to the board, and `hole` is the column of the gray rows already on the stack. During search, attack cancels pending lines first; the rest rises (at most 8 rows) after any placement that clears nothing, so the bot prefers clearing lines and keeping the stack low when garbage is on the way. `versus --blind-other` disables this for the opponent to measure its effect; `tune` accepts `--seed` and `--out`.
 
+Bag knowledge: the front end tracks the 7-bag from the first queue it sees and sends `bag=<letters>`, the pieces the piece after the queue can still be. One letter extends the queue exactly; several letters are averaged over in a final speculative layer. Perfect clear search runs before the beam when the stack is at most four rows: a depth-first search over the known pieces and hold, memoised on the board, looks for a placement sequence that empties the board. When the stack reaches ten rows the evaluation switches to a survival mode that scales down combo, back-to-back and T-slot bonuses and adds a bonus per cleared line. `versus --other-off speculate|panic|perfect` disables one of these for the opponent.
+
 Line protocol: the front end writes one line per decision to the engine and reads one line back.
 
 ```
-rows=<u16 rows from bottom, comma separated> hold=<piece or -> queue=<current piece followed by previews> b2b=<0|1> combo=<n> [incoming=<n>] [hole=<column>]
+rows=<u16 rows from bottom, comma separated> hold=<piece or -> queue=<current piece followed by previews> b2b=<0|1> combo=<n> [incoming=<n>] [hole=<column>] [bag=<letters>]
 MOVE use_hold=<0|1> piece=<P> rot=<r> x=<x> y=<y> spin=<s> keys=<L,R,CW,CCW,SD or -> after=<rows> hold=<piece or -> b2b=<0|1> combo=<n> attack=<n> lines=<n>
 ```
 
@@ -120,11 +142,11 @@ target/release/tetrabot tune                   tune weights, writes weights.txt
 
 ## How the front end works
 
-Calibration: the screen is searched for the board without fixed coordinates. A scan over window sizes with a 1:2 aspect ratio finds the large dark rectangle that stands out most from its surroundings, using an integral image, and its edges are refined from dark runs. Cell size follows from the board width. Pieces in the queue are located as colour blobs about one tetromino in size, stacked in a column to the right of the board, and a fit over their positions gives the slot pitch. The hold box is found the same way on the left. A layout is accepted only if at least four queue pieces can be read from it. If the queue becomes unreadable for a few seconds, for example after the window moved, calibration runs again.
+Calibration: the screen is searched for the board without fixed coordinates. A scan over window sizes with a 1:2 aspect ratio finds the large dark rectangle that stands out most from its surroundings, using an integral image, and its edges are refined from dark runs. The board edges are cut at thin white border lines, so the garbage meter strip and the name plate next to the board are not mistaken for board. Cell size follows from the board width. Pieces in the queue are located as colour blobs about one tetromino in size, stacked in a column to the right of the board, and a fit over their positions gives the slot pitch. The hold box is found the same way on the left, with a position derived from the board when the box is empty or greyed out. A layout is accepted only if at least four queue pieces can be read from it. If the queue becomes unreadable for a few seconds, for example after the window moved, calibration runs again.
 
 Reading: each board cell is sampled and counted as filled when its tint matches a piece colour or a neutral gray. Queue slots and the hold box are classified by the average tint of their bright pixels. The falling piece is the four highest cells and is removed from the stack before the engine is asked for a move.
 
-Loop: wait for the queue to become readable, attach to the current piece (at the start of a game, or by waiting for the queue to shift if a game is already running), ask the engine, replay the key sequence, then wait until the queue has advanced. Between moves the front end keeps its own copy of the board and compares it with what it sees, so transient on-screen effects do not corrupt the state. When gray cells appear, the screen becomes the source of truth.
+Loop: wait for the queue to become readable, attach to the current piece (at the start of a game, or by waiting for the queue to shift if a game is already running), ask the engine, replay the key sequence, then wait until the queue has advanced. Between moves the front end keeps its own copy of the board and compares it with what it sees, so transient on-screen effects do not corrupt the state. The copy is also compared against the board with one to eight garbage rows raised below it, so incoming lines are recognised without trusting the raw screen. A gray cell only counts when its row is almost completely gray. While the keys of one piece are pressed, the engine already works on the next position, predicting the garbage meter after the move; if the screen matches the prediction the answer is used, otherwise the engine is asked again. Garbage rows are recognised from the settled screen itself, whatever their holes are, so Expert Mode blocks with different holes do not desynchronise the stored board; if the screen keeps disagreeing with the stored board it is adopted after a few settled reads. Isolated groups of up to three cells high on the board are treated as on-screen text and ignored. The current piece is cross-checked against the falling piece on the screen, and the queue wait accepts the first clean frame so a stale preview slot cannot cause a long stall.
 
 ## Tests
 
