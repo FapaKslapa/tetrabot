@@ -44,3 +44,22 @@ pub fn solo(bot: &Bot, seed: u64, pieces: u32, garbage_every: u32, burst: u32) -
     }
     (g.sent as f32 / pieces as f32, true, pieces, g.stats)
 }
+
+const STRESS_EVERY: u32 = 4;
+const STRESS_BURST: u32 = 8;
+
+pub fn survival_score(a: &Bot, b: &Bot, seed0: u64, games: u64, pieces: u32) -> f32 {
+    let mut total = 0.0;
+    for i in 0..games {
+        let (attack_a, _, lived_a, _) = solo(a, seed0 + i, pieces, STRESS_EVERY, STRESS_BURST);
+        let (attack_b, _, lived_b, _) = solo(b, seed0 + i, pieces, STRESS_EVERY, STRESS_BURST);
+        total += match lived_a.cmp(&lived_b) {
+            std::cmp::Ordering::Greater => 1.0,
+            std::cmp::Ordering::Less => 0.0,
+            std::cmp::Ordering::Equal if attack_a > attack_b => 1.0,
+            std::cmp::Ordering::Equal if attack_a < attack_b => 0.0,
+            std::cmp::Ordering::Equal => 0.5,
+        };
+    }
+    total / games as f32
+}

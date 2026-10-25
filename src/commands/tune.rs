@@ -12,6 +12,8 @@ pub fn tune(args: &[String]) {
     let seed: u64 = arg(args, "--seed", "19088743").parse().unwrap();
     let out = arg(args, "--out", "weights.txt");
     let accept: f32 = arg(args, "--accept", "0.58").parse().unwrap();
+    let survival: f32 = arg(args, "--survival", "0").parse().unwrap();
+    let stress_games = (games / 2).max(6);
     let mut rng = Rng(seed | 1);
     let fitness = |cand: &Vec<f32>, base: &Vec<f32>, seed0: u64| -> f32 {
         let a = Bot::new(Weights::from_vec(cand), depth, width);
@@ -21,7 +23,12 @@ pub fn tune(args: &[String]) {
             s += play_match(&a, &b, seed0 + i, 400);
             s += 1.0 - play_match(&b, &a, seed0 + i, 400);
         }
-        s / (2.0 * games as f32)
+        let versus = s / (2.0 * games as f32);
+        if survival <= 0.0 {
+            return versus;
+        }
+        let stress = survival_score(&a, &b, seed0 + 5000, stress_games, 300);
+        (1.0 - survival) * versus + survival * stress
     };
     for it in 0..iters {
         let mut cand = best.clone();

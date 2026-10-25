@@ -11,6 +11,7 @@ GAMES = os.environ.get("GAMES", "40")
 TUNE_DEPTH = os.environ.get("TUNE_DEPTH", "4")
 TUNE_WIDTH = os.environ.get("TUNE_WIDTH", "30")
 ACCEPT = os.environ.get("ACCEPT", "0.58")
+SURVIVAL = os.environ.get("SURVIVAL", "0.4")
 CHECK_GAMES = os.environ.get("CHECK_GAMES", "40")
 SRC = os.environ.get("SRC", os.environ.get("ZIP_PATH", ""))
 BASE = "/kaggle/working" if os.path.isdir("/kaggle/working") else "/content" if os.path.isdir("/content") else os.getcwd()
@@ -52,7 +53,7 @@ def start_tuning(binary, outdir):
         out = os.path.join(outdir, "weights_%d.txt" % i)
         log = open(os.path.join(outdir, "log_%d.txt" % i), "w")
         cmd = [binary, "tune", "--iters", "100000", "--games", GAMES, "--tdepth", TUNE_DEPTH,
-               "--twidth", TUNE_WIDTH, "--accept", ACCEPT, "--seed", str(1000 + 7919 * i), "--out", out]
+               "--twidth", TUNE_WIDTH, "--accept", ACCEPT, "--survival", SURVIVAL, "--seed", str(1000 + 7919 * i), "--out", out]
         procs.append(subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=outdir))
     return procs
 
