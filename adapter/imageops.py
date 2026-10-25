@@ -25,7 +25,7 @@ def runs(flags, min_gap):
             if start is None:
                 start = i
             last = i
-        elif start is not None and i - last > min_gap:
+        elif start is not None and (i - last > min_gap or i == len(flags)):
             out.append([start, last + 1])
             start = None
     return out

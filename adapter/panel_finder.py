@@ -6,6 +6,11 @@ from palette import DEFAULT_PALETTE, palette_mask
 SLOT_CELLS = 3.0
 NEXT_SLOTS = 5
 PANEL_HALF_WIDTH = 0.77
+RING = 0.3
+MERGE_GAP = 1.5
+DARK_LEVEL = 80
+RING_DARK = 0.7
+HOLD_OFFSET = 3.4
 
 
 def piece_blobs(img, x0, x1, y0, y1, c, palette, f=3):
@@ -23,8 +28,24 @@ def piece_blobs(img, x0, x1, y0, y1, c, palette, f=3):
             continue
         if area * f * f < 0.35 * w * h:
             continue
-        blobs.append((x0 + (bx0 + bx1) * f / 2.0, y0 + (by0 + by1) * f / 2.0, w, h))
+        blob = (x0 + (bx0 + bx1) * f / 2.0, y0 + (by0 + by1) * f / 2.0, w, h)
+        if on_dark(img, blob, c):
+            blobs.append(blob)
     return blobs
+
+
+def on_dark(img, blob, c):
+    cx, cy, w, h = blob
+    m = RING * c
+    height, width = img.shape[:2]
+    xa, xb = int(max(0, cx - w / 2 - m)), int(min(width, cx + w / 2 + m))
+    ya, yb = int(max(0, cy - h / 2 - m)), int(min(height, cy + h / 2 + m))
+    patch = img[ya:yb, xa:xb].max(axis=2) < DARK_LEVEL
+    ix0, ix1 = int(cx - w / 2) - xa, int(cx + w / 2) - xa
+    iy0, iy1 = int(cy - h / 2) - ya, int(cy + h / 2) - ya
+    ring = np.ones(patch.shape, dtype=bool)
+    ring[max(0, iy0):iy1, max(0, ix0):ix1] = False
+    return ring.any() and patch[ring].mean() >= RING_DARK
 
 
 def pick_column(blobs, c):
@@ -33,7 +54,17 @@ def pick_column(blobs, c):
         group = [o for o in blobs if abs(o[0] - b[0]) <= 0.7 * c]
         if len(group) > len(best):
             best = group
-    return sorted(best, key=lambda t: t[1])
+    return merge_fragments(sorted(best, key=lambda t: t[1]), c)
+
+
+def merge_fragments(column, c):
+    merged = []
+    for b in column:
+        if merged and b[1] - merged[-1][-1][1] < MERGE_GAP * c:
+            merged[-1].append(b)
+        else:
+            merged.append([b])
+    return [tuple(float(np.mean([m[i] for m in group])) for i in range(4)) for group in merged]
 
 
 def fit_slots(column, board_top, c):
@@ -101,7 +132,11 @@ def find_hold(img, board, next_box, pitch, palette):
         hx = max(blobs, key=lambda t: t[2] * t[3])[0]
         half = PANEL_HALF_WIDTH * pitch
         return [hx - half, ya, hx + half, yb]
-    return find_dark_run(img, bx - 9 * c, bx, ya, yb, c)
+    run = find_dark_run(img, bx - 9 * c, bx, ya, yb, c)
+    if run is not None or next_box is None:
+        return run
+    half = PANEL_HALF_WIDTH * pitch
+    return [bx - HOLD_OFFSET * c - half, ya, bx - HOLD_OFFSET * c + half, yb]
 
 
 def find_panels(img, board, palette=DEFAULT_PALETTE):

@@ -6,6 +6,22 @@ DARK = 56
 MIN_FILL = 0.85
 MIN_CONTRAST = 0.5
 SCAN_FACTOR = 4
+LINE_BRIGHT = 150
+LINE_SHARE = 0.6
+LINE_MAX = 0.2
+
+
+def split_at_lines(runs, bright, c):
+    lines = [r for r in imageops.runs(bright, 1) if r[1] - r[0] <= LINE_MAX * c]
+    out = []
+    for a, b in runs:
+        start = a
+        for la, lb in lines:
+            if start < la and lb < b and la - start >= 1:
+                out.append((start, la))
+                start = lb
+        out.append((start, b))
+    return [r for r in out if r[1] > r[0]]
 
 
 def refine(img, x, y, w, h):
@@ -18,6 +34,8 @@ def refine(img, x, y, w, h):
     ya, yb = int(y + 0.25 * h), int(y + 0.75 * h)
     cols = (v[ya:yb, gx0:gx1] < DARK).mean(axis=0) > 0.35
     rx = imageops.runs(cols, gap)
+    bright_cols = (v[ya:yb, gx0:gx1] > LINE_BRIGHT).mean(axis=0) > LINE_SHARE
+    rx = split_at_lines(rx, bright_cols, c)
     if not rx:
         return x, y, w, h
     rx = [r for r in rx if r[1] + gx0 > x and r[0] + gx0 < x + w] or rx
@@ -26,6 +44,8 @@ def refine(img, x, y, w, h):
     xa, xb = int(nx + 0.2 * nw), int(nx + 0.8 * nw)
     rows = (v[gy0:gy1, xa:xb] < DARK).mean(axis=1) > 0.35
     ry = imageops.runs(rows, gap)
+    bright_rows = (v[gy0:gy1, xa:xb] > LINE_BRIGHT).mean(axis=1) > LINE_SHARE
+    ry = split_at_lines(ry, bright_rows, nw / 10.0)
     ry = [r for r in ry if r[1] + gy0 > y and r[0] + gy0 < y + h] or ry
     if not ry:
         return nx, y, nw, 2 * nw
