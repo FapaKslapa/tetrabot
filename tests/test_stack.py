@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "adapter"))
 
 import numpy as np
 
-from stack import ascii_board, bit_difference, count_cells, garbage_hole, strip_floating_top
+from stack import ascii_board, bit_difference, count_cells, drop_stray_gray, garbage_hole, strip_floating_top
 from engine_client import parse_move
 
 
@@ -14,6 +14,22 @@ class StackTest(unittest.TestCase):
     def test_counts(self):
         self.assertEqual(count_cells([0b101, 0b11]), 4)
         self.assertEqual(bit_difference([0b101], [0b110]), 2)
+
+    def test_stray_gray_removed(self):
+        gray = np.array([120.0, 120.0, 120.0])
+        rows = [0] * 20
+        colors = {}
+        for c in range(10):
+            if c != 4:
+                rows[0] |= 1 << c
+                colors[(0, c)] = gray
+        for c in (2, 3, 4):
+            rows[7] |= 1 << c
+            colors[(7, c)] = gray
+        out, kept = drop_stray_gray(rows, colors)
+        self.assertEqual(out[7], 0)
+        self.assertEqual(out[0], rows[0])
+        self.assertEqual(len(kept), 9)
 
     def test_floating_top_removed(self):
         rows = [0] * 20

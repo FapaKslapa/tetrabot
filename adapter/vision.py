@@ -2,15 +2,18 @@ from typing import NamedTuple, Tuple
 
 import numpy as np
 
-from palette import classify, is_block, vote
+from palette import classify, is_block, label_pixels
 
 BRIGHT = 110
-MIN_PIECE_PIXELS = 20
+SAMPLE_STRIDE = 1.5
+CORE_MARGIN = 0.11
+MIN_CORE = 0.15
 METER_LEFT = 0.80
 METER_RIGHT = 0.30
 METER_ON = 60
 METER_OFF = 40
 METER_MAX = 15
+FALLING_MIN_ROW = 16
 
 
 class Frame(NamedTuple):
@@ -36,6 +39,17 @@ def sample_wide(frame, x, y, half_w, half_h):
     if len(patch) == 0:
         return np.zeros((1, 3))
     return patch
+
+
+def solid_pixels(mask, k):
+    w = 2 * k + 1
+    if mask.shape[0] < w or mask.shape[1] < w:
+        return 0
+    a = mask.astype(np.int32)
+    c = np.vstack([np.zeros((1, a.shape[1]), dtype=np.int32), a.cumsum(axis=0)])
+    rows = c[w:] - c[:-w]
+    c = np.hstack([np.zeros((rows.shape[0], 1), dtype=np.int32), rows.cumsum(axis=1)])
+    return int(((c[:, w:] - c[:, :-w]) == w * w).sum())
 
 
 def crop(frame, box):
@@ -70,16 +84,24 @@ class Reader:
         return out, colors
 
     def piece_in(self, region, scale):
-        pixels = region.reshape(-1, 3).astype(float)
-        if len(pixels) == 0:
+        stride = max(1, int(round(scale * SAMPLE_STRIDE)))
+        sub = region[::stride, ::stride]
+        if sub.size == 0:
             return None
-        bright = pixels[pixels.max(axis=1) >= BRIGHT]
-        if len(bright) < MIN_PIECE_PIXELS * scale * scale:
-            return None
-        letter, count = vote(bright, self.palette)
-        if count < MIN_PIECE_PIXELS * scale * scale:
-            return None
-        return letter
+        labels = label_pixels(sub, self.palette, BRIGHT).reshape(sub.shape[:2])
+        bx0, _, bx1, _ = self.layout.board
+        cell = (bx1 - bx0) / 10.0 * scale / stride
+        k = max(1, int(CORE_MARGIN * cell))
+        needed = MIN_CORE * cell * cell
+        counts = np.bincount(labels[labels >= 0], minlength=len(self.palette))
+        best, best_core = None, 0
+        for idx in np.argsort(-counts)[:3]:
+            if counts[idx] < needed:
+                break
+            core = solid_pixels(labels == idx, k)
+            if core >= needed and core > best_core:
+                best, best_core = int(idx), core
+        return None if best is None else list(self.palette)[best]
 
     def previews(self, frame):
         x0, y0, x1, y1 = self.layout.next
@@ -99,6 +121,18 @@ class Reader:
         votes = [classify(v, self.palette) for _, v in cells]
         best = max(set(votes), key=votes.count)
         return best if votes.count(best) >= 3 else None
+
+    def falling(self, colors):
+        cells = sorted(colors.items(), key=lambda kv: -kv[0][0])[:4]
+        if len(cells) < 4:
+            return None
+        rows = [rc[0] for rc, _ in cells]
+        cols = [rc[1] for rc, _ in cells]
+        if min(rows) < FALLING_MIN_ROW or max(rows) - min(rows) > 3 or max(cols) - min(cols) > 3:
+            return None
+        votes = [classify(v, self.palette) for _, v in cells]
+        best = max(set(votes), key=votes.count)
+        return best if best is not None and votes.count(best) >= 3 else None
 
     def meter_levels(self, frame):
         bx0, by0, bx1, by1 = self.layout.board

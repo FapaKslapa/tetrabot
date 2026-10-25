@@ -47,6 +47,17 @@ def vote(pixels, palette=DEFAULT_PALETTE):
     return letters[int(counts.argmax())], int(counts.max())
 
 
+def label_pixels(pixels, palette=DEFAULT_PALETTE, brightness=0):
+    px = np.asarray(pixels, dtype=np.float32).reshape(-1, 3)
+    peak = px.max(axis=1)
+    n = px / np.maximum(peak, 1.0)[:, None]
+    refs = np.array([normalize(v) for v in palette.values()], dtype=np.float32)
+    dist = ((n[:, None, :] - refs[None, :, :]) ** 2).sum(axis=2)
+    labels = dist.argmin(axis=1)
+    labels[(dist.min(axis=1) > MAX_TINT_DISTANCE) | (peak < brightness)] = -1
+    return labels
+
+
 def is_gray(color):
     mx = float(color.max())
     return 55 <= mx <= 215 and float(color.min()) / mx > 0.85

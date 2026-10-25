@@ -11,7 +11,7 @@ DEFAULTS = {
         "hold": "c", "hard_drop": "space", "soft_drop": "down",
     },
     "timing": {"tap_ms": 20, "gap_ms": 8, "soft_drop_ms": 70, "spawn_timeout_ms": 1500},
-    "search": {"depth": 6, "width": 120, "nosd": True},
+    "search": {"depth": 6, "width": 120, "nosd": True, "think_ms": 40, "ponder": True, "threads": 3},
 }
 
 

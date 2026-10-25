@@ -1,7 +1,6 @@
 import time
 
-KEYCODES = {"left": 123, "right": 124, "down": 125, "up": 126, "space": 49,
-            "z": 6, "x": 7, "c": 8, "a": 0, "shift": 56}
+import backends
 
 KEY_ACTIONS = {"L": "left", "R": "right", "CW": "cw", "CCW": "ccw", "SD": "soft_drop"}
 
@@ -11,14 +10,10 @@ class Keys:
         self.keys = settings["keys"]
         self.timing = settings["timing"]
         self.dry = dry
-        self.quartz = None
-        if not dry:
-            import Quartz
-            self.quartz = Quartz
+        self.backend = None if dry else backends.load()
 
     def post(self, name, down):
-        event = self.quartz.CGEventCreateKeyboardEvent(None, KEYCODES[name], down)
-        self.quartz.CGEventPost(self.quartz.kCGHIDEventTap, event)
+        self.backend.press(name, down)
 
     def tap(self, name, hold_ms=None):
         if self.dry:

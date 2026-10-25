@@ -56,5 +56,30 @@ class LayoutTest(unittest.TestCase):
         self.assertIsNone(layout_mod.detect_pixels(np.full((600, 800, 3), 60, dtype=np.uint8)))
 
 
+class BorderTest(unittest.TestCase):
+    def test_coloured_frame_is_not_a_piece(self):
+        img, board = make_frame(hold=None)
+        boxes = layout_mod.detect_pixels(img)
+        found = layout_mod.to_points(boxes, 1.0)
+        x0, y0, x1, y1 = found.hold
+        img[y1 - 4:y1, x0:x1] = DEFAULT_PALETTE["L"]
+        img[y0:y1, x1 - 4:x1] = DEFAULT_PALETTE["L"]
+        reader = Reader(found, DEFAULT_PALETTE, 95)
+        self.assertIsNone(reader.hold(Frame(img, 1.0, (0, 0))))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class PanelHeaderTest(unittest.TestCase):
+    def test_coloured_header_is_not_a_piece(self):
+        import numpy as np
+        import panel_finder
+        img = np.zeros((400, 400, 3), dtype=np.uint8)
+        blob = (180.0, 130.0, 160, 60)
+        img[100:160, 100:260] = (182, 103, 54)
+        self.assertTrue(panel_finder.on_dark(img, blob, 61.0))
+        img[:, :] = (182, 103, 54)
+        img[100:160, 100:260] = (180, 100, 50)
+        self.assertFalse(panel_finder.on_dark(img, blob, 61.0))

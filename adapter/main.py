@@ -6,12 +6,15 @@ import settings as settings_mod
 import system
 from capture import Capture
 from cli import parse_args
+from cold_clear import ColdClear
 from engine_client import Engine
 from keys import Keys
 from session import Session
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BINARY = os.path.join(ROOT, "target", "release", "tetrabot")
+EXE = ".exe" if sys.platform.startswith("win") else ""
+BINARY = os.path.join(ROOT, "target", "release", "tetrabot" + EXE)
+COLD_CLEAR = os.path.join(ROOT, "vendor", "cold-clear-2", "target", "release", "cold-clear-2" + EXE)
 
 
 def countdown(seconds):
@@ -27,6 +30,10 @@ def main():
         settings["search"]["depth"] = args.depth
     if args.width:
         settings["search"]["width"] = args.width
+    if args.think:
+        settings["search"]["think_ms"] = args.think
+    if args.no_ponder:
+        settings["search"]["ponder"] = False
     settings["garbage"] = args.garbage
     settings["trace"] = args.trace
     if not args.watch and not os.path.exists(BINARY):
@@ -40,7 +47,15 @@ def main():
     engine = None
     if not args.watch:
         search = settings["search"]
-        engine = Engine(BINARY, ROOT, search["depth"], search["width"], search.get("nosd", True) and not args.sd)
+        engine = Engine(BINARY, ROOT, search["depth"], search["width"], search.get("nosd", True) and not args.sd,
+                        search.get("threads", 1))
+        if args.engine == "cc2":
+            if os.path.exists(COLD_CLEAR):
+                engine = ColdClear(COLD_CLEAR, ROOT, engine, search["think_ms"], args.keep_tree, args.garbage)
+                if not args.sd:
+                    print("Cold Clear plays best with --sd and SDF set to infinity in the game handling settings.")
+            else:
+                print("Cold Clear 2 is not built, using the built-in search. Run the build script to get it.")
     controls = system.Controls() if live else None
     session = Session(settings, capture, engine, Keys(settings, not live), controls, args.watch)
     try:
