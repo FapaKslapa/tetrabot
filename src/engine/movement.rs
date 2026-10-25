@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::board::Board;
 use super::kicks::rotate;
-use super::piece::Piece;
+use super::piece::{cells, Piece};
 
 pub static NO_SD: AtomicBool = AtomicBool::new(false);
 
@@ -56,8 +56,35 @@ pub fn drop_dist(b: &Board, p: Piece, a: Active) -> i32 {
     d
 }
 
+fn column_masks(b: &Board) -> [u64; 10] {
+    let mut cols = [0u64; 10];
+    let top = b.height();
+    for r in 0..top {
+        let row = b.rows[r];
+        for c in 0..10 {
+            cols[c] |= ((row >> c) as u64 & 1) << r;
+        }
+    }
+    cols
+}
+
+#[inline]
+fn drop_dist_fast(cols: &[u64; 10], p: Piece, a: Active) -> i32 {
+    let mut d = i32::MAX;
+    for &(dx, dy) in cells(p, a.rot) {
+        let cx = a.x as i32 + dx as i32;
+        let cy = a.y as i32 + dy as i32;
+        let below = cols[cx as usize] & ((1u64 << cy) - 1);
+        let gap = if below == 0 { cy } else { cy - (63 - below.leading_zeros() as i32) - 1 };
+        if gap < d {
+            d = gap;
+        }
+    }
+    d
+}
+
 const NX: usize = 13;
-const NY: usize = 26;
+const NY: usize = 32;
 const NS: usize = NX * NY * 12;
 
 #[inline]
@@ -89,6 +116,7 @@ fn explore(b: &Board, p: Piece, keep: bool) -> (Vec<Placement>, Vec<(u16, u8)>) 
     if b.collides(p, SPAWN.rot, SPAWN.x as i32, SPAWN.y as i32) {
         return (out, Vec::new());
     }
+    let cols = column_masks(b);
     let mut seen = [false; NS];
     let mut placed = [false; NS];
     let mut parent: Vec<(u16, u8)> = if keep { vec![(u16::MAX, 0); NS] } else { Vec::new() };
@@ -101,7 +129,7 @@ fn explore(b: &Board, p: Piece, keep: bool) -> (Vec<Placement>, Vec<(u16, u8)>) 
         let si = queue[head] as usize;
         head += 1;
         let a = sdec(si);
-        let d = drop_dist(b, p, a);
+        let d = drop_dist_fast(&cols, p, a);
         let fa = Active { x: a.x, y: a.y - d as i8, rot: a.rot, spin: if d > 0 { 0 } else { a.spin } };
         let fi = sidx(fa);
         if !placed[fi] {
@@ -201,4 +229,62 @@ pub fn simulate_keys(b: &Board, p: Piece, keys: &[Key]) -> Active {
         a.spin = 0;
     }
     a
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lcg(state: &mut u64) -> u64 {
+        *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *state >> 33
+    }
+
+    #[test]
+    fn fast_drop_matches_slow_drop() {
+        let mut seed = 7u64;
+        for _ in 0..300 {
+            let mut b = Board::new();
+            let height = (lcg(&mut seed) % 14) as usize;
+            for r in 0..height {
+                b.rows[r] = (lcg(&mut seed) as u16) & super::super::board::FULL;
+            }
+            let cols = column_masks(&b);
+            for &p in Piece::ALL.iter() {
+                for rot in 0..4u8 {
+                    for x in -2..10i8 {
+                        for y in 0..22i8 {
+                            let a = Active { x, y, rot, spin: 0 };
+                            if b.collides(p, rot, x as i32, y as i32) {
+                                continue;
+                            }
+                            assert_eq!(drop_dist(&b, p, a), drop_dist_fast(&cols, p, a));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tall_boards_do_not_alias_states() {
+        let mut seed = 99u64;
+        for height in 14..=24usize {
+            for _ in 0..40 {
+                let mut b = Board::new();
+                for r in 0..height {
+                    let mut row = (lcg(&mut seed) as u16) & super::super::board::FULL;
+                    if r + 3 < height {
+                        row |= 0b0111111110;
+                    }
+                    b.rows[r] = row;
+                }
+                for &p in Piece::ALL.iter() {
+                    for pl in placements(&b, p) {
+                        assert!(!b.collides(p, pl.rot, pl.x as i32, pl.y as i32));
+                    }
+                }
+            }
+        }
+    }
 }

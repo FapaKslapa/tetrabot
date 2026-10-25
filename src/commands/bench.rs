@@ -7,12 +7,15 @@ use crate::sim::*;
 pub fn run_solo(args: &[String], depth: usize, width: usize) {
     let n: u32 = arg(args, "--pieces", "500").parse().unwrap();
     let g: u32 = arg(args, "--garbage-every", "0").parse().unwrap();
+    let burst: u32 = arg(args, "--burst", "0").parse().unwrap();
+    let games: u64 = arg(args, "--games", "5").parse().unwrap();
     let bot = Bot::new(weights_or_default(), depth, width);
     let t = std::time::Instant::now();
     let mut tot = 0.0;
-    let games = 5;
+    let mut lived = 0u64;
     for s in 0..games {
-        let (app, alive, p, st) = solo(&bot, 100 + s, n, g);
+        let (app, alive, p, st) = solo(&bot, 100 + s, n, g, burst);
+        lived += p as u64;
         println!(
             "seed {}: attack/piece {:.2}, survived: {}, pieces: {} | lines 1:{} 2:{} 3:{} 4:{} tspin:{} mini:{} pc:{}",
             s, app, alive, p, st[1], st[2], st[3], st[4], st[5], st[6], st[7]
@@ -20,9 +23,10 @@ pub fn run_solo(args: &[String], depth: usize, width: usize) {
         tot += app;
     }
     println!(
-        "mean attack/piece {:.2}, {:.1} ms/move",
+        "mean attack/piece {:.2}, mean pieces survived {:.1}, {:.1} ms/move",
         tot / games as f32,
-        t.elapsed().as_secs_f64() * 1000.0 / (games as f64 * n as f64)
+        lived as f64 / games as f64,
+        t.elapsed().as_secs_f64() * 1000.0 / lived.max(1) as f64
     );
 }
 
@@ -30,10 +34,14 @@ pub fn run_versus(args: &[String], depth: usize, width: usize) {
     let n: u64 = arg(args, "--games", "20").parse().unwrap();
     let a = Bot::new(weights_or_default(), depth, width);
     let bw = load_weights(&arg(args, "--other", "")).unwrap_or_else(Weights::default_weights);
-    let b = Bot::new(bw, depth, width).with_awareness(!flag(args, "--blind-other"));
+    let off = arg(args, "--other-off", "");
+    let b = Bot::new(bw, depth, width)
+        .with_awareness(!flag(args, "--blind-other"))
+        .with_modules(off != "speculate", off != "panic", off != "perfect")
+        .with_defense(off != "defend");
     let mut s = 0.0;
     for i in 0..n {
-        s += play_match(&a, &b, 7 + i, 600);
+        s += if i % 2 == 0 { play_match(&a, &b, 7 + i, 600) } else { 1.0 - play_match(&b, &a, 7 + i, 600) };
     }
     println!("A wins {:.1} of {}", s, n);
 }

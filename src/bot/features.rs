@@ -1,6 +1,37 @@
 use super::weights::{Weights, NF};
 use crate::engine::*;
 
+pub const PANIC_HEIGHT: usize = 10;
+pub const PANIC_CLEAR: f32 = 2.0;
+pub const DEFEND_CANCEL: f32 = 1.0;
+pub const DEFEND_CLEAR: f32 = 1.5;
+const PANIC_SCALE: f32 = 0.25;
+
+const SLOT_VALUE: [f32; 3] = [0.1, 1.5, 2.0];
+
+fn slot_value(b: &Board, colh: &[i32; 10]) -> f32 {
+    let mut best = 0.0f32;
+    for x in 0..8usize {
+        for left in [true, false] {
+            let (side, far) = if left { (x, x + 2) } else { (x + 2, x) };
+            let y = colh[side];
+            if y < 1 || colh[x + 1] >= y {
+                continue;
+            }
+            let y = y as usize;
+            let wall = |r: usize| b.rows[r] >> far & 1 == 1;
+            if !wall(y - 1) || wall(y) || y + 1 >= b.rows.len() || !wall(y + 1) {
+                continue;
+            }
+            let stem = 1u16 << (x + 1);
+            let body = 0b111u16 << x;
+            let lines = (b.rows[y - 1] | stem == FULL) as usize + (b.rows[y] | body == FULL) as usize;
+            best = best.max(SLOT_VALUE[lines]);
+        }
+    }
+    best
+}
+
 pub fn features(b: &Board, b2b: bool, combo: i32) -> [f32; NF] {
     let top = b.height();
     let mut colh = [0i32; 10];
@@ -63,14 +94,17 @@ pub fn features(b: &Board, b2b: bool, combo: i32) -> [f32; NF] {
         if b2b { 1.0 } else { 0.0 },
         combo.min(6).max(0) as f32,
         flat,
+        slot_value(b, &colh),
     ]
 }
 
-pub fn eval(w: &Weights, b: &Board, b2b: bool, combo: i32) -> f32 {
+pub fn eval(w: &Weights, b: &Board, b2b: bool, combo: i32, panic: bool) -> f32 {
     let f = features(b, b2b, combo);
+    let tall = panic && f[3] >= PANIC_HEIGHT as f32;
     let mut s = 0.0;
     for i in 0..NF {
-        s += f[i] * w.f[i];
+        let scale = if tall && matches!(i, 7 | 8 | 9 | 10) { PANIC_SCALE } else { 1.0 };
+        s += f[i] * w.f[i] * scale;
     }
     s
 }
@@ -99,4 +133,26 @@ pub(super) fn reward(w: &Weights, l: &Lock, atk: u32, b2b_before: bool, b2b_afte
         r += w.r[11];
     }
     r
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_double_slot() {
+        let mut b = Board::new();
+        b.rows[0] = FULL & !(1 << 1);
+        b.rows[1] = FULL & !(1 << 1);
+        b.rows[2] = FULL & !0b111;
+        b.rows[3] = 1 << 2;
+        assert_eq!(features(&b, false, 0)[10], 2.0);
+    }
+
+    #[test]
+    fn flat_board_has_no_slot() {
+        let mut b = Board::new();
+        b.rows[0] = FULL;
+        assert_eq!(features(&b, false, 0)[10], 0.0);
+    }
 }

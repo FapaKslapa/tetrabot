@@ -18,3 +18,8 @@ pub fn weights_or_default() -> Weights {
     }
     Weights::default_weights()
 }
+
+pub fn print_defaults() {
+    let v: Vec<String> = Weights::default_weights().to_vec().iter().map(|x| format!("{:.4}", x)).collect();
+    println!("{}", v.join(" "));
+}

@@ -1,4 +1,4 @@
-pub const NF: usize = 10;
+pub const NF: usize = 11;
 pub const NR: usize = 12;
 
 #[derive(Clone, Debug)]
@@ -10,7 +10,7 @@ pub struct Weights {
 impl Weights {
     pub fn default_weights() -> Weights {
         Weights {
-            f: [-9.0, -1.2, -0.9, -0.35, -0.12, -0.6, 1.2, 1.5, 0.8, 0.0],
+            f: [-9.0, -1.2, -0.9, -0.35, -0.12, -0.6, 1.2, 1.5, 0.8, 0.0, 0.0],
             r: [3.0, -2.0, -0.8, 0.0, 2.0, 0.0, 2.0, 4.0, 5.0, 25.0, -3.0, -0.15],
         }
     }

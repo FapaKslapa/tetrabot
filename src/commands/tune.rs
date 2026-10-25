@@ -11,6 +11,7 @@ pub fn tune(args: &[String]) {
     let mut best = weights_or_default().to_vec();
     let seed: u64 = arg(args, "--seed", "19088743").parse().unwrap();
     let out = arg(args, "--out", "weights.txt");
+    let accept: f32 = arg(args, "--accept", "0.58").parse().unwrap();
     let mut rng = Rng(seed | 1);
     let fitness = |cand: &Vec<f32>, base: &Vec<f32>, seed0: u64| -> f32 {
         let a = Bot::new(Weights::from_vec(cand), depth, width);
@@ -32,7 +33,7 @@ pub fn tune(args: &[String]) {
         }
         let f = fitness(&cand, &best, 1000 + it as u64 * 97);
         println!("iter {} fitness vs best: {:.2}", it, f);
-        if f > 0.58 {
+        if f > accept {
             best = cand;
             println!("  accepted new weights");
             let s: Vec<String> = best.iter().map(|x| format!("{:.4}", x)).collect();

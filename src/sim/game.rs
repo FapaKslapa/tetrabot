@@ -4,6 +4,8 @@ use super::rng::Rng;
 use crate::bot::*;
 use crate::engine::*;
 
+const VIEW: usize = 6;
+
 pub struct Game {
     pub st: State,
     pub queue: VecDeque<Piece>,
@@ -11,6 +13,7 @@ pub struct Game {
     pub hole: usize,
     pub sent: u32,
     pub pieces: u32,
+    pub popped: usize,
     pub dead: bool,
     pub rng: Rng,
     pub stats: [u32; 8],
@@ -19,12 +22,13 @@ pub struct Game {
 impl Game {
     pub fn new(seed: u64) -> Game {
         let mut g = Game {
-            st: State { board: Board::new(), hold: None, b2b: false, combo: 0, pending: 0, hole: 0 },
+            st: State { board: Board::new(), hold: None, b2b: false, combo: 0, pending: 0, hole: 0, bag: 0 },
             queue: VecDeque::new(),
             pending: 0,
             hole: 0,
             sent: 0,
             pieces: 0,
+            popped: 0,
             dead: false,
             stats: [0; 8],
             rng: Rng(seed.wrapping_mul(0x9E3779B97F4A7C15) | 1),
@@ -48,14 +52,23 @@ impl Game {
         self.st.pending = self.pending;
         self.st.hole = self.hole;
         let q = self.view();
+        self.st.bag = self.bag_after_view();
         bot.choose(&self.st, &q)
     }
 
+    fn bag_after_view(&self) -> u8 {
+        let next = self.popped + VIEW;
+        let start = next / 7 * 7;
+        let seen: Vec<Piece> = (0..VIEW).filter(|i| self.popped + i >= start).map(|i| self.queue[i]).collect();
+        bag_mask(&Piece::ALL) & !bag_mask(&seen)
+    }
+
     pub fn view(&self) -> Vec<Piece> {
-        self.queue.iter().take(6).copied().collect()
+        self.queue.iter().take(VIEW).copied().collect()
     }
 
     pub fn apply(&mut self, d: &Decision) -> u32 {
+        self.popped += if d.use_hold && self.st.hold.is_none() { 2 } else { 1 };
         if d.use_hold {
             let cur = self.queue.pop_front().unwrap();
             match self.st.hold {

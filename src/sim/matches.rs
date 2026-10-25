@@ -26,7 +26,7 @@ pub fn play_match(a: &Bot, b: &Bot, seed: u64, max_pieces: u32) -> f32 {
     }
 }
 
-pub fn solo(bot: &Bot, seed: u64, pieces: u32, garbage_every: u32) -> (f32, bool, u32, [u32; 8]) {
+pub fn solo(bot: &Bot, seed: u64, pieces: u32, garbage_every: u32, burst: u32) -> (f32, bool, u32, [u32; 8]) {
     let mut g = Game::new(seed);
     for i in 0..pieces {
         match g.decide(bot) {
@@ -39,7 +39,7 @@ pub fn solo(bot: &Bot, seed: u64, pieces: u32, garbage_every: u32) -> (f32, bool
             return (g.sent as f32 / (g.pieces.max(1)) as f32, false, g.pieces, g.stats);
         }
         if garbage_every > 0 && i % garbage_every == garbage_every - 1 {
-            g.pending += 1;
+            g.pending += if burst > 1 { 1 + g.rng.below(burst as u64) as u32 } else { 1 };
         }
     }
     (g.sent as f32 / pieces as f32, true, pieces, g.stats)
