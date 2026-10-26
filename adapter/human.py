@@ -3,6 +3,7 @@ import random
 import time
 
 from human_config import FIDGETS, HUMAN_DEFAULTS, STAGES, stack_height
+from human_form import Form
 from human_schedule import build_schedule
 
 
@@ -25,6 +26,8 @@ class Human:
         self.skipped = 0
         self.pressure = 0
         self.last_plan = None
+        self.form = Form(self.rng, self.cfg)
+        self.calm = True
 
     def urgent(self, move):
         return self.pressure > 0 or stack_height(move.after) >= self.cfg["urgent_height"]
@@ -32,13 +35,24 @@ class Human:
     def drift(self):
         low, high = self.cfg["tempo_range"]
         self.tempo = min(high, max(low, self.tempo + self.rng.uniform(-0.04, 0.04)))
+        self.form.step()
+
+    def pace(self):
+        return self.tempo * (self.form.pace() if self.calm else 1.0)
+
+    def scale(self):
+        return self.form.chance_scale() if self.calm else 1.0
+
+    def mistake_scale(self):
+        return self.form.mistake_scale() if self.calm else 1.0
 
     def between(self, bounds):
         low, high = bounds
-        return self.rng.uniform(low, high) * self.tempo / 1000.0
+        return self.rng.uniform(low, high) * self.pace() / 1000.0
 
     def think(self, move):
         self.drift()
+        self.calm = not self.urgent(move)
         cfg = self.cfg
         ms = cfg["think_median_ms"] * math.exp(self.rng.gauss(0, cfg["think_sigma"]))
         if self.urgent(move):
@@ -46,9 +60,9 @@ class Human:
         else:
             ms *= 1 + cfg["height_factor"] * stack_height(move.after) / 20.0
             ms *= 1 + cfg["key_factor"] * min(len(getattr(move, "keys", ())), 8)
-            if self.rng.random() < cfg["long_think_chance"]:
+            if self.rng.random() < cfg["long_think_chance"] * self.scale():
                 ms += self.rng.uniform(*cfg["long_think_extra_ms"])
-        ms = min(cfg["think_max_ms"], max(cfg["think_min_ms"], ms * self.tempo))
+        ms = min(cfg["think_max_ms"], max(cfg["think_min_ms"], ms * self.pace()))
         return ms / 1000.0
 
     def opening(self):
@@ -60,13 +74,19 @@ class Human:
     def tap(self, base_ms, soft=False):
         if soft:
             return base_ms * self.rng.uniform(0.9, 1.4) * self.tempo / 1000.0
-        return self.between(self.cfg["tap_ms"])
+        low, high = self.cfg["tap_ms"]
+        u = min(1.0, max(0.0, 0.4 + 0.18 * self.rng.gauss(0, 1) + self.form.step_touch()))
+        return (low + (high - low) * u) * self.pace() / 1000.0
 
     def gap(self):
-        return self.between(self.cfg["gap_ms"])
+        low, high = self.cfg["gap_ms"]
+        if self.rng.random() < 0.1:
+            return low * 0.6 * self.pace() / 1000.0
+        u = min(1.0, max(0.0, 0.35 + 0.22 * self.rng.gauss(0, 1) + 0.5 * self.form.touch))
+        return (low + (high - low) * u) * self.pace() / 1000.0
 
     def hesitation(self):
-        if self.rng.random() < self.cfg["hesitate_chance"]:
+        if self.rng.random() < self.cfg["hesitate_chance"] * self.scale():
             return self.between(self.cfg["hesitate_ms"])
         return 0.0
 
@@ -85,10 +105,11 @@ class Human:
         if stack_height(move.after) > cfg["fidget_max_height"] or self.urgent(move):
             return [], ""
         roll = self.rng.random()
-        if roll < cfg["fidget_chance"] and move.piece != "O":
+        fidget, regret = cfg["fidget_chance"] * self.scale(), cfg["regret_chance"] * self.scale()
+        if roll < fidget and move.piece != "O":
             rename = {"CW": names["cw"], "CCW": names["ccw"]}
             return [(rename[c], "rot", base_ms, True, 0.0) for c in self.rng.choice(FIDGETS)], "fidget"
-        if roll < cfg["fidget_chance"] + cfg["regret_chance"]:
+        if roll < fidget + regret:
             way, back = self.rng.choice([("left", "right"), ("right", "left")])
             count = self.rng.choice([1, 2, 2, 3])
             out = [(names[way], "move", base_ms, True, 0.0)] * count
@@ -103,7 +124,7 @@ class Human:
         notes = []
         urgent = self.urgent(move)
         think += self.opening()
-        if cfg["pps"] and not urgent and self.rng.random() < cfg["pause_chance"]:
+        if cfg["pps"] and not urgent and self.rng.random() < cfg["pause_chance"] * self.scale():
             think += self.between(cfg["pause_ms"])
             notes.append("pause")
         self.fall = 0
