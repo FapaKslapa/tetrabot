@@ -5,7 +5,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "adapter"))
 
 import settings as settings_mod
-from session import SETTLE, Session
+from session import Session
 from session_constants import FAR_GIVE_UP
 from stack import best_candidate, drop_specks
 
