@@ -13,6 +13,9 @@ class Move:
     combo: int
     attack: int
     lines: int
+    rot: int = 0
+    x: int = 0
+    y: int = 0
 
 
 def parse_move(line):
@@ -23,7 +26,8 @@ def parse_move(line):
     keys = [] if kv.get("keys", "-") == "-" else kv["keys"].split(",")
     after = [int(x) for x in kv["after"].split(",") if x != ""]
     return Move(kv["piece"], kv["use_hold"] == "1", keys, after,
-                int(kv["b2b"]), int(kv["combo"]), int(kv["attack"]), int(kv["lines"]))
+                int(kv["b2b"]), int(kv["combo"]), int(kv["attack"]), int(kv["lines"]),
+                int(kv.get("rot", 0)), int(kv.get("x", 0)), int(kv.get("y", 0)))
 
 
 class Engine:
