@@ -8,7 +8,7 @@ from stack import (best_candidate, clear_cells, count_cells, count_gray, drop_sp
 
 
 class SessionBoard:
-    def sync_current(self, colors):
+    def sync_current(self, colors, frame=None):
         state = self.state
         if state.current is None:
             return
@@ -20,6 +20,7 @@ class SessionBoard:
             return
         if self.settings.get("trace"):
             print("current piece corrected: %s -> %s" % (state.current, seen), flush=True)
+        self.dumper.save(frame, "corrected", "state=%s seen=%s queue=%s\n" % (state.current, seen, "".join(p or "?" for p in self.last_seen)))
         state.current = seen
         state.votes = QueueVote()
         state.bag.valid = False
@@ -29,7 +30,7 @@ class SessionBoard:
         if state.current is None or state.pieces == 0 or not state.memory:
             return None
         rows, colors = self.reader.board(frame)
-        self.sync_current(colors)
+        self.sync_current(colors, frame)
         board = self.board_rows(rows, colors, False, quick=True)
         if board is None or board is SETTLE:
             return None
