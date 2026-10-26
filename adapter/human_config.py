@@ -28,6 +28,10 @@ HUMAN_DEFAULTS = {
     "min_gap_ms": 5,
     "overlap_ratio": 0.5,
     "mistake_chance": 0.05,
+    "urgent_height": 10,
+    "key_factor": 0.04,
+    "opening_ms": [180, 350],
+    "opening_idle_s": 4.0,
     "seed": None,
 }
 

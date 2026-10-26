@@ -1,5 +1,6 @@
 import math
 import random
+import time
 
 from human_config import FIDGETS, HUMAN_DEFAULTS, STAGES, stack_height
 from human_schedule import build_schedule
@@ -22,6 +23,11 @@ class Human:
         self.fall = 0
         self.row_ms = None
         self.skipped = 0
+        self.pressure = 0
+        self.last_plan = None
+
+    def urgent(self, move):
+        return self.pressure > 0 or stack_height(move.after) >= self.cfg["urgent_height"]
 
     def drift(self):
         low, high = self.cfg["tempo_range"]
@@ -35,11 +41,21 @@ class Human:
         self.drift()
         cfg = self.cfg
         ms = cfg["think_median_ms"] * math.exp(self.rng.gauss(0, cfg["think_sigma"]))
-        ms *= 1 + cfg["height_factor"] * stack_height(move.after) / 20.0
-        if self.rng.random() < cfg["long_think_chance"]:
-            ms += self.rng.uniform(*cfg["long_think_extra_ms"])
+        if self.urgent(move):
+            ms *= 0.7
+        else:
+            ms *= 1 + cfg["height_factor"] * stack_height(move.after) / 20.0
+            ms *= 1 + cfg["key_factor"] * min(len(getattr(move, "keys", ())), 8)
+            if self.rng.random() < cfg["long_think_chance"]:
+                ms += self.rng.uniform(*cfg["long_think_extra_ms"])
         ms = min(cfg["think_max_ms"], max(cfg["think_min_ms"], ms * self.tempo))
         return ms / 1000.0
+
+    def opening(self):
+        now = time.time()
+        fresh = self.last_plan is None or now - self.last_plan > self.cfg["opening_idle_s"]
+        self.last_plan = now
+        return self.between(self.cfg["opening_ms"]) if fresh else 0.0
 
     def tap(self, base_ms, soft=False):
         if soft:
@@ -66,7 +82,7 @@ class Human:
 
     def extras(self, move, names, base_ms):
         cfg = self.cfg
-        if stack_height(move.after) > cfg["fidget_max_height"]:
+        if stack_height(move.after) > cfg["fidget_max_height"] or self.urgent(move):
             return [], ""
         roll = self.rng.random()
         if roll < cfg["fidget_chance"] and move.piece != "O":
@@ -85,11 +101,13 @@ class Human:
         cfg = self.cfg
         think = self.think(move)
         notes = []
-        if cfg["pps"] and self.rng.random() < cfg["pause_chance"]:
+        urgent = self.urgent(move)
+        think += self.opening()
+        if cfg["pps"] and not urgent and self.rng.random() < cfg["pause_chance"]:
             think += self.between(cfg["pause_ms"])
             notes.append("pause")
         self.fall = 0
-        if (cfg["pps"] and stack_height(move.after) <= cfg["fidget_max_height"] and self.fall_possible()
+        if (cfg["pps"] and not urgent and stack_height(move.after) <= cfg["fidget_max_height"] and self.fall_possible()
                 and self.rng.random() < cfg["fall_chance"]):
             self.fall = 2 if self.rng.random() < 0.3 else 1
             notes.append("fall")
@@ -106,7 +124,7 @@ class Human:
             more = press[4] if len(press) > 4 else 0.0
             items.append({"key": key, "kind": kind, "extra": flag,
                           "down": self.tap(base, kind == "soft"), "gap": self.gap(),
-                          "pre": more + (self.confirm() if kind == "drop" else self.hesitation())})
+                          "pre": more + (self.confirm() if kind == "drop" else 0.0 if urgent else self.hesitation())})
         budget = None
         if cfg["pps"]:
             base_budget = max(0.05, 1.0 / cfg["pps"] - cfg["pace_overhead_ms"] / 1000.0)

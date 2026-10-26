@@ -229,6 +229,7 @@ class Session(SessionBoard, SessionSpawn):
             hold_after, next_piece, consumed = state.hold, previews[0], 1
         state.votes.advance(consumed)
         self.start_ponder(move, hold_after, next_piece, previews[consumed:], bag, incoming, hole)
+        self.keys.pressure = incoming
         self.keys.run(move)
         pressed = time.time()
         state.pieces += 1

@@ -14,6 +14,7 @@ class Keys:
         self.planned_ms = None
         self.probe = None
         self.note = ""
+        self.pressure = 0
         self.backend = None if dry else backends.load()
 
     def post(self, name, down):
@@ -36,6 +37,7 @@ class Keys:
 
     def run_human(self, move):
         human = self.human
+        human.pressure = self.pressure
         presses = []
         if move.use_hold:
             presses.append((self.keys["hold"], "hold", self.timing["tap_ms"], False))
