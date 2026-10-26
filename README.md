@@ -142,7 +142,7 @@ Engine commands:
 ```
 target/release/tetrabot solo --pieces 300      attack per piece in solo runs
 target/release/tetrabot check                  verify that key paths reach the chosen placement
-target/release/tetrabot versus --other w.txt   match against another weight file
+target/release/tetrabot versus --a old.txt --other new.txt --games 100   match between two weight files, games run in parallel (--jobs N), with a win rate and a 95% margin; --seed-offset N runs new games on top of an earlier batch
 target/release/tetrabot tune                   tune weights, writes weights.txt
 ```
 
