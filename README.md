@@ -43,6 +43,12 @@ Options:
 | `--threads N` (engine) | Beam search worker threads; set `search.threads` in the settings file (default 3) |
 | `--pc-ms N` (engine) | Wall-clock budget of the perfect clear search in milliseconds (default 40) |
 | `--settings FILE` | JSON file overriding keys, timing and search settings |
+| `--human` | Press keys like a person: variable thinking pauses, uneven tap and gap timing, a drifting tempo, small hesitations and rotations that cancel out. Same placements, same strength |
+| `--pps N` | With `--human`: target average pieces per second (for example `3.75`). Not a fixed time per piece: some pieces hesitate, add rotations or take a wrong turn and correct it, and the ordinary pieces speed up to pay for them. Often it also waits until the piece has fallen a row or two before touching it (`fall_chance`); if the room's gravity is too slow to be worth waiting for, it notices and stops. Without `--sd` (and with a finite SDF in the game) it holds soft drop until it sees the piece drop, so slow gravity is not a problem; set `"descend": false` to wait passively instead. With `--trace` each piece prints the planned press time and what it did |
+| `mistake_chance` (setting) | With `--human`: about 1 piece in 20 is placed one or two columns off the best spot, only on a low stack, with nothing incoming, and only if the board stays nearly as good. Set to 0 to turn it off. Printed as `imperfect:` with `--trace` |
+| `--human-seed N` | Seed for `--human`, for reproducible runs |
+
+`--human` only changes how the chosen moves are typed, the engine is untouched. Its values can be tuned under `"human"` in the settings file (`think_median_ms`, `think_max_ms`, `tap_ms` (default: from `timing`), `gap_ms`, `fidget_chance`, `tempo_range` and so on, see `adapter/human.py`). Use it only in rooms where everyone knows it is a bot.
 
 Cold Clear 2 needs soft drop to reach tucks and T-spins under overhangs, so for it set the soft drop factor (SDF) to infinity in the game handling settings and start with `--sd`. Without `--sd` the bot only plays placements reachable without soft drop and falls back to the next best suggestion.
 
