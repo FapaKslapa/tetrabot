@@ -5,6 +5,7 @@ import calibrate
 from game_state import GameState
 from ponder import Ponder
 from queue_vote import QueueVote
+from debug_dump import Dumper
 from session_board import SessionBoard
 from session_constants import (GAME_OVER_IDLE, RECALIBRATE_AFTER_IDLE, RECALIBRATE_INTERVAL, SETTLE,
                                SETTLE_POLL, SETTLE_SECONDS, missing)
@@ -38,6 +39,9 @@ class Session(SessionBoard, SessionSpawn):
         self.spawn_state = "ok"
         self.paths = deque(maxlen=10)
         self.timeouts = 0
+        self.dumper = Dumper()
+        self.unsettled = 0
+        self.last_incoming = 0
         self.ponder = Ponder(engine) if engine is not None and getattr(engine, "supports_ponder", False) \
             and settings["search"].get("ponder") else None
 
@@ -116,7 +120,7 @@ class Session(SessionBoard, SessionSpawn):
         if missing(previews) > 1:
             return
         state = self.state
-        self.sync_current(colors)
+        self.sync_current(colors, frame)
         if state.current is None and not self.attach(frame, rows, colors, previews):
             return
         board = self.board_rows(rows, colors, False)
@@ -231,7 +235,11 @@ class Session(SessionBoard, SessionSpawn):
             hold_after, next_piece, consumed = state.hold, previews[0], 1
         state.votes.advance(consumed)
         self.start_ponder(move, hold_after, next_piece, previews[consumed:], bag, incoming, hole)
-        self.keys.pressure = incoming
+        if self.path != "quick" or (self.last_incoming > 0 and incoming == 0):
+            self.unsettled = 4
+        self.last_incoming = incoming
+        self.keys.pressure = incoming or self.unsettled
+        self.unsettled = max(0, self.unsettled - 1)
         self.keys.run(move)
         pressed = time.time()
         state.pieces += 1
