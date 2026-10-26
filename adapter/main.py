@@ -8,6 +8,8 @@ from capture import Capture
 from cli import parse_args
 from cold_clear import ColdClear
 from engine_client import Engine
+from human import Human
+from imperfect import Imperfect
 from keys import Keys
 from session import Session
 
@@ -57,7 +59,20 @@ def main():
             else:
                 print("Cold Clear 2 is not built, using the built-in search. Run the build script to get it.")
     controls = system.Controls() if live else None
-    session = Session(settings, capture, engine, Keys(settings, not live), controls, args.watch)
+    human = None
+    if args.human:
+        if args.human_seed is not None:
+            settings["human"]["seed"] = args.human_seed
+        if args.pps:
+            settings["human"]["pps"] = args.pps
+        if settings["human"].get("descend") is None:
+            settings["human"]["descend"] = not args.sd
+        human = Human(settings["human"], settings["timing"])
+        print("Human mode on: same moves, human-like timing%s." % (", soft drop to let pieces fall" if human.cfg["descend"] else ""))
+    session = Session(settings, capture, engine, Keys(settings, not live, human), controls, args.watch)
+    if human is not None and engine is not None:
+        session.imperfect = Imperfect(getattr(engine, "engine", engine), settings["human"].get("mistake_chance", 0.05),
+                                      settings["human"].get("seed"))
     try:
         session.run()
     except KeyboardInterrupt:

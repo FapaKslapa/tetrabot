@@ -17,4 +17,9 @@ def parse_args():
     ap.add_argument("--keep-tree", action="store_true", help="keep the Cold Clear search running between moves")
     ap.add_argument("--sd", action="store_true", help="allow soft drop in key paths (needs SDF = infinity)")
     ap.add_argument("--no-ponder", action="store_true", help="do not think about the next piece while keys are pressed")
+    ap.add_argument("--human", action="store_true",
+                    help="press keys like a person: variable thinking pauses, uneven timing, extra rotations "
+                         "(same placements, same strength; only for rooms where everyone knows it is a bot)")
+    ap.add_argument("--pps", type=float, help="with --human: target pieces per second (for example 3.5)")
+    ap.add_argument("--human-seed", type=int, help="seed for --human, for reproducible runs")
     return ap.parse_args()
