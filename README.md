@@ -48,7 +48,7 @@ Options:
 | `mistake_chance` (setting) | With `--human`: about 1 piece in 20 is placed one or two columns off the best spot, only on a low stack, with nothing incoming, and only if the board stays nearly as good. Set to 0 to turn it off. Printed as `imperfect:` with `--trace` |
 | `--human-seed N` | Seed for `--human`, for reproducible runs |
 
-`--human` only changes how the chosen moves are typed, the engine is untouched. Its values can be tuned under `"human"` in the settings file (`think_median_ms`, `think_max_ms`, `tap_ms` (default: from `timing`), `gap_ms`, `fidget_chance`, `tempo_range` and so on, see `adapter/human.py`). Use it only in rooms where everyone knows it is a bot.
+`--human` only changes how the chosen moves are typed, the engine is untouched. Its values can be tuned under `"human"` in the settings file (`think_median_ms`, `think_max_ms`, `tap_ms` (default: from `timing`), `gap_ms`, `fidget_chance`, `tempo_range` and so on, see `adapter/human.py`). Over a game its focus drifts between flow (slightly faster, fewer hesitations, fewer off-best placements) and slumps (the opposite), and tap lengths and gaps are skewed and correlated from one key to the next. Under pressure (tall stack or incoming garbage) none of this applies: it plays fast and straight. The average pace stays at `--pps`. Use it only in rooms where everyone knows it is a bot.
 
 Cold Clear 2 needs soft drop to reach tucks and T-spins under overhangs, so for it set the soft drop factor (SDF) to infinity in the game handling settings and start with `--sd`. Without `--sd` the bot only plays placements reachable without soft drop and falls back to the next best suggestion.
 
