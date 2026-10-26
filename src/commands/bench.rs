@@ -32,18 +32,49 @@ pub fn run_solo(args: &[String], depth: usize, width: usize) {
 
 pub fn run_versus(args: &[String], depth: usize, width: usize) {
     let n: u64 = arg(args, "--games", "20").parse().unwrap();
-    let a = Bot::new(weights_or_default(), depth, width);
+    let offset: u64 = arg(args, "--seed-offset", "0").parse().unwrap();
+    let jobs: usize = arg(args, "--jobs", "0").parse().unwrap();
+    let jobs = if jobs == 0 { std::thread::available_parallelism().map(|v| v.get()).unwrap_or(1) } else { jobs };
+    let aw = load_weights(&arg(args, "--a", "")).unwrap_or_else(weights_or_default);
+    let a = Bot::new(aw, depth, width);
     let bw = load_weights(&arg(args, "--other", "")).unwrap_or_else(Weights::default_weights);
     let off = arg(args, "--other-off", "");
     let b = Bot::new(bw, depth, width)
         .with_awareness(!flag(args, "--blind-other"))
         .with_modules(off != "speculate", off != "panic", off != "perfect")
         .with_defense(off != "defend");
-    let mut s = 0.0;
-    for i in 0..n {
-        s += if i % 2 == 0 { play_match(&a, &b, 7 + i, 600) } else { 1.0 - play_match(&b, &a, 7 + i, 600) };
+    let next = std::sync::atomic::AtomicU64::new(0);
+    let results = std::sync::Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..jobs {
+            scope.spawn(|| loop {
+                let i = next.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                if i >= n {
+                    break;
+                }
+                let seed = 7 + offset + i;
+                let score = if i % 2 == 0 { play_match(&a, &b, seed, 600) } else { 1.0 - play_match(&b, &a, seed, 600) };
+                let mut done = results.lock().unwrap();
+                done.push(score);
+                let total: f32 = done.iter().sum();
+                println!("game {}/{}: A {:.1} | running A wins {:.1} of {}", done.len(), n, score, total, done.len());
+            });
+        }
+    });
+    let done = results.into_inner().unwrap();
+    let games = done.len() as f32;
+    let wins: f32 = done.iter().sum();
+    let rate = wins / games;
+    let margin = 1.96 * (rate * (1.0 - rate) / games).sqrt();
+    println!("A wins {:.1} of {}", wins, n);
+    println!("A win rate {:.1}% +- {:.1}% (95%)", rate * 100.0, margin * 100.0);
+    if (rate - 0.5).abs() <= margin {
+        println!("no significant difference: run more games, for example with --seed-offset {}", offset + n);
+    } else if rate > 0.5 {
+        println!("A is better");
+    } else {
+        println!("B is better");
     }
-    println!("A wins {:.1} of {}", s, n);
 }
 
 pub fn run_check() {
