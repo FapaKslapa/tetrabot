@@ -59,13 +59,14 @@ class Imperfect:
     def __init__(self, engine, chance=0.05, seed=None, max_height=8):
         self.engine = engine
         self.chance = chance
+        self.scale = 1.0
         self.max_height = max_height
         self.rng = random.Random(seed)
         self.last = ""
 
     def maybe(self, move, rows, b2b, combo, incoming):
         self.last = ""
-        if (self.chance <= 0 or incoming or self.rng.random() >= self.chance
+        if (self.chance <= 0 or incoming or self.rng.random() >= self.chance * self.scale
                 or height(move.after) > self.max_height or not hasattr(self.engine, "place")):
             return move
         base_holes, base_height = holes(move.after), height(move.after)

@@ -216,6 +216,8 @@ class Session(SessionBoard, SessionSpawn):
             self.on_dead()
             return
         if self.imperfect is not None:
+            human = getattr(self.keys, "human", None)
+            self.imperfect.scale = human.mistake_scale() if human else 1.0
             chosen = self.imperfect.maybe(move, full, state.b2b, state.combo, incoming)
             if chosen is not move:
                 move = chosen
